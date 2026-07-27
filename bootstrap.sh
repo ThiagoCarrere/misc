@@ -42,8 +42,41 @@ else
   cp "$TMPDIR_LOCAL/bloco.md" CLAUDE.md
 fi
 
-# 2. Permissoes genericas
-curl --ssl-no-revoke -fsSL "$REPO_BASE/permissions.json" -o .claude/settings.local.json
+# 2. Permissoes genericas (mescla com o que ja existir, sem sobrescrever)
+curl --ssl-no-revoke -fsSL "$REPO_BASE/permissions.json" -o "$TMPDIR_LOCAL/permissions.json"
+
+cat > "$TMPDIR_LOCAL/mesclar-permissoes.ps1" <<'PSEOF'
+param(
+    [string]$SettingsPath,
+    [string]$PermissoesPath
+)
+$ErrorActionPreference = 'Stop'
+$novas = (Get-Content $PermissoesPath -Raw | ConvertFrom-Json).permissions.allow
+
+if (Test-Path $SettingsPath) {
+    $json = Get-Content $SettingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+} else {
+    $json = [PSCustomObject]@{}
+}
+if (-not ($json.PSObject.Properties.Name -contains 'permissions')) {
+    $json | Add-Member -MemberType NoteProperty -Name 'permissions' -Value ([PSCustomObject]@{})
+}
+if (-not ($json.permissions.PSObject.Properties.Name -contains 'allow')) {
+    $json.permissions | Add-Member -MemberType NoteProperty -Name 'allow' -Value @()
+}
+$existente = @($json.permissions.allow)
+$mesclado = [System.Collections.ArrayList]@($existente)
+foreach ($item in $novas) {
+    if ($existente -notcontains $item) { [void]$mesclado.Add($item) }
+}
+$json.permissions.allow = @($mesclado)
+
+$utf8SemBom = New-Object System.Text.UTF8Encoding $false
+$caminhoAbsoluto = Join-Path (Get-Location).Path $SettingsPath
+[System.IO.File]::WriteAllText($caminhoAbsoluto, ($json | ConvertTo-Json -Depth 10), $utf8SemBom)
+PSEOF
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "$TMPDIR_LOCAL/mesclar-permissoes.ps1" -SettingsPath ".claude/settings.local.json" -PermissoesPath "$TMPDIR_LOCAL/permissions.json"
 
 # 3. Hook de resincronizacao automatica
 curl --ssl-no-revoke -fsSL "$REPO_BASE/hooks/lembrete-diretrizes.ps1" -o .claude/hooks/lembrete-diretrizes.ps1

@@ -38,9 +38,31 @@ if (Test-Path 'CLAUDE.md') {
     Escrever-Utf8 'CLAUDE.md' $bloco
 }
 
-# 2. Permissoes genericas
-$permissoes = $webClient.DownloadString("$repoBase/permissions.json")
-Escrever-Utf8 '.claude\settings.local.json' $permissoes
+# 2. Permissoes genericas (mescla com o que ja existir, sem sobrescrever)
+function Mesclar-Permissoes($caminhoSettings, $novasPermissoes) {
+    if (Test-Path $caminhoSettings) {
+        $json = Get-Content $caminhoSettings -Raw -Encoding UTF8 | ConvertFrom-Json
+    } else {
+        $json = [PSCustomObject]@{}
+    }
+    if (-not ($json.PSObject.Properties.Name -contains 'permissions')) {
+        $json | Add-Member -MemberType NoteProperty -Name 'permissions' -Value ([PSCustomObject]@{})
+    }
+    if (-not ($json.permissions.PSObject.Properties.Name -contains 'allow')) {
+        $json.permissions | Add-Member -MemberType NoteProperty -Name 'allow' -Value @()
+    }
+    $existente = @($json.permissions.allow)
+    $mesclado = [System.Collections.ArrayList]@($existente)
+    foreach ($item in $novasPermissoes) {
+        if ($existente -notcontains $item) { [void]$mesclado.Add($item) }
+    }
+    $json.permissions.allow = @($mesclado)
+    return ($json | ConvertTo-Json -Depth 10)
+}
+
+$permissoesRemotas = ($webClient.DownloadString("$repoBase/permissions.json") | ConvertFrom-Json).permissions.allow
+$settingsLocalPath = '.claude\settings.local.json'
+Escrever-Utf8 $settingsLocalPath (Mesclar-Permissoes $settingsLocalPath $permissoesRemotas)
 
 # 3. Hook de resincronizacao automatica
 Invoke-WebRequest -Uri "$repoBase/hooks/lembrete-diretrizes.ps1" -OutFile '.claude\hooks\lembrete-diretrizes.ps1'
