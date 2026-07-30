@@ -224,3 +224,6 @@ já registradas.
 Antes de começar a trabalhar, verifique se o projeto já tem um repositório 
 git iniciado. Se não tiver, inicialize (git init) — isso é pré-requisito para 
 a diretriz de rastreabilidade (item 14), já que tudo deve ser commitado.
+
+### 22. SEGURANÇA
+Todo sistema já deve nascer com as proteções de rate limiting e CSRF.
